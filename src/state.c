@@ -242,7 +242,11 @@ static int on_text(const char bytes[], size_t len, void *user)
   VTermPos oldpos = state->pos;
 
   // We'll have at most len codepoints
+#if _WIN32
+  uint32_t* codepoints = (uint32_t*)malloc(sizeof(uint32_t) * len);
+#else
   uint32_t codepoints[len];
+#endif
   int npoints = 0;
   size_t eaten = 0;
 
@@ -260,7 +264,12 @@ static int on_text(const char bytes[], size_t len, void *user)
    * for even a single codepoint
    */
   if(!npoints)
+  {
+#if _WIN32
+    free(codepoints);
+#endif
     return eaten;
+  }
 
   if(state->gsingle_set && npoints)
     state->gsingle_set = 0;
@@ -319,7 +328,11 @@ static int on_text(const char bytes[], size_t len, void *user)
 
     int width = 0;
 
+#ifdef _WIN32
+    uint32_t* chars = (uint32_t*)malloc(sizeof(uint32_t) * (glyph_ends - glyph_starts + 1));
+#else
     uint32_t chars[glyph_ends - glyph_starts + 1];
+#endif
 
     for( ; i < glyph_ends; i++) {
       chars[i - glyph_starts] = codepoints[i];
@@ -389,6 +402,9 @@ static int on_text(const char bytes[], size_t len, void *user)
     else {
       state->pos.col += width;
     }
+#ifdef _WIN32
+    free(chars);
+#endif
   }
 
   updatecursor(state, &oldpos, 0);
@@ -402,6 +418,9 @@ static int on_text(const char bytes[], size_t len, void *user)
   }
 #endif
 
+#if _WIN32
+  free(codepoints);
+#endif
   return eaten;
 }
 
@@ -518,12 +537,20 @@ static int settermprop_int(VTermState *state, VTermProp prop, int v)
 
 static int settermprop_string(VTermState *state, VTermProp prop, const char *str, size_t len)
 {
+#ifdef _WIN32
+  char* strvalue = (char*)malloc(len + 1);
+#else
   char strvalue[len+1];
+#endif
   strncpy(strvalue, str, len);
   strvalue[len] = 0;
 
   VTermValue val = { .string = strvalue };
-  return vterm_state_set_termprop(state, prop, &val);
+  int ret = vterm_state_set_termprop(state, prop, &val);
+#ifdef _WIN32
+  free(strvalue);
+#endif
+  return ret;
 }
 
 static void savecursor(VTermState *state, int save)
